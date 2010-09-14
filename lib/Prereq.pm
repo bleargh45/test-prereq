@@ -102,15 +102,16 @@ about this.
 =cut
 
 use base qw(Exporter);
-use vars qw($VERSION $EXCLUDE_CPANPLUS @EXPORT @prereqs);
+use vars qw($VERSION $EXCLUDE_CPANPLUS @EXPORT @prereqs $DEBUG);
 
-
+$DEBUG   = 1;
 $VERSION = '1.037_01';
 
 @EXPORT = qw( prereq_ok );
 
 use Carp qw(carp);
 use CPAN;
+use Data::Dumper;
 use ExtUtils::MakeMaker;
 use File::Find;
 use Module::CoreList;
@@ -233,6 +234,7 @@ sub _prereq_check
 	# remove modules found in PREREQ_PM
 	foreach my $module ( @$prereqs )
 		{
+		diag( "Deleting $module found explicitly in prereqs" ) if $DEBUG;
 		delete $loaded->{$module};
 		}
 
@@ -240,6 +242,7 @@ sub _prereq_check
 	my $distro = $class->_get_dist_modules( 'blib/lib' );
 	foreach my $module ( @$distro )
 		{
+		diag( "Deleting $module provided by the distro" ) if $DEBUG;
 		delete $loaded->{$module};
 		}
 
@@ -247,12 +250,14 @@ sub _prereq_check
 	$distro = $class->_get_test_libraries();
 	foreach my $module ( @$distro )
 		{
+		diag( "Deleting $module found in the test directory" ) if $DEBUG;
 		delete $loaded->{$module};
 		}
 
 	# remove modules in the skip array
 	foreach my $module ( @$skip )
 		{
+		diag( "Deleting $module skipped in prereq_ok test" ) if $DEBUG;
 		delete $loaded->{$module};
 		}
 
@@ -265,6 +270,7 @@ sub _prereq_check
 
 		foreach my $module ( @$modules )
 			{
+			diag( "Deleting $module that comes with a declared prereq" ) if $DEBUG;
 			delete $loaded->{$module};
 			}
 		}
@@ -274,9 +280,12 @@ sub _prereq_check
 		foreach my $module ( keys %$loaded )
 			{
 			next unless $module =~ m/^CPANPLUS::/;
+			diag( "Deleting $module because CPANPLUS is like, whatever" ) if $DEBUG;
 			delete $loaded->{$module};
 			}
 		}
+
+	diag( "Left with ", join " ", keys %$loaded, " modules that I couldn't remove" ) if $DEBUG;
 
 	if( keys %$loaded ) # stuff left in %loaded, oops!
 		{
@@ -366,13 +375,24 @@ sub _get_loaded_modules
 	File::Find::find( sub { push @scripts, $File::Find::name if -f $_    }, 'blib/script' )
 		if -e 'blib/script';
 	
-	my @found = ();
+	my %found = ();
 	foreach my $file ( @libs, @t, @scripts )
 		{
-		push @found, @{ $class->_get_from_file( $file ) };
+		my $found_in_file = $class->_get_from_file( $file );
+		$found{$_}++ foreach @$found_in_file;
+		
+		if( $DEBUG ) {
+			my $d = Data::Dumper->new ([$found_in_file], [qw(*found_in_file)]);
+			diag "Test::Prereq discovered in $file: ", $d->Dump;
+			}
+		}
+	
+	if( $DEBUG ) {
+		my $d = Data::Dumper->new ([\%found], [qw(*found)]);
+		diag 'Test::Prereq discovered: ', $d->Dump;
 		}
 
-	return { map { $_, 1 } @found };
+	return \%found;
 	}
 
 sub _get_test_libraries
