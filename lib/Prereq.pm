@@ -358,8 +358,9 @@ sub _get_loaded_modules
 
 	my( @libs, @t, @scripts );
 	
-	File::Find::find( sub { push @libs,    $File::Find::name if m/\.pm$/ }, 'blib/lib' )
-		if -e 'blib/lib';
+	# XXX: Why do I check for -e here? Does it warn if the dir isn't there?
+	File::Find::find( sub { push @libs,    $File::Find::name if m/\.pm$/ }, 'blib/lib', 't' )
+		if( -e 'blib/lib' || -e 't' );
 	File::Find::find( sub { push @t,       $File::Find::name if m/\.t$/  }, 't' )
 		if -e 't';
 	File::Find::find( sub { push @scripts, $File::Find::name if -f $_    }, 'blib/script' )
